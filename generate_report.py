@@ -16,14 +16,20 @@ import direct
 import metrika
 
 # ── режим: DEMO если токены пустые, LIVE если заполнены ──────────────────────
-DEMO_MODE = not (config.DIRECT_TOKEN and config.METRIKA_TOKEN)
+DIRECT_LIVE = bool(config.DIRECT_TOKEN and "СЮДА" not in config.DIRECT_TOKEN)
+METRIKA_LIVE = bool(config.METRIKA_TOKEN and "СЮДА" not in config.METRIKA_TOKEN)
 GOOGLE_READY = bool(config.GOOGLE_SHEET_URL)
 
-if DEMO_MODE:
-    print("⚠️  Токены не заданы — запуск в ДЕМО-режиме с тестовыми данными")
-    print("   Заполните DIRECT_TOKEN и METRIKA_TOKEN в config.py для боевого режима\n")
+print(f"Период отчёта: {config.DATE_FROM} → {config.DATE_TO}")
+if DIRECT_LIVE:
+    print("✅ Яндекс.Директ: боевой режим")
 else:
-    print(f"✅ Боевой режим | период: {config.DATE_FROM} → {config.DATE_TO}\n")
+    print("⚠️  Яндекс.Директ: демо-режим (нет токена)")
+
+if METRIKA_LIVE:
+    print("✅ Яндекс.Метрика: боевой режим\n")
+else:
+    print("⚠️  Яндекс.Метрика: демо-режим (нет токена)\n")
 
 if not GOOGLE_READY:
     print("⚠️  Ссылка на Google Таблицу (GOOGLE_SHEET_URL) не заполнена в config.py")
@@ -36,16 +42,17 @@ def collect_data() -> list[dict]:
     for project_name in config.PROJECTS:
         print(f"  → {project_name} ...", end=" ")
 
-        if DEMO_MODE:
-            d = direct.get_stats_demo(project_name)
-            m = metrika.get_stats_demo(project_name)
-        else:
+        if DIRECT_LIVE:
             d = direct.get_stats(
                 token=config.DIRECT_TOKEN,
                 client_login=config.DIRECT_CLIENT_LOGIN,
                 date_from=config.DATE_FROM,
                 date_to=config.DATE_TO,
             )
+        else:
+            d = direct.get_stats_demo(project_name)
+
+        if METRIKA_LIVE:
             # В боевом режиме запрашиваем базовые данные (сессии и отказы)
             m = metrika.get_stats(
                 token=config.METRIKA_TOKEN,
@@ -54,6 +61,8 @@ def collect_data() -> list[dict]:
                 date_to=config.DATE_TO,
                 goal_id=config.METRIKA_GOAL_ID
             )
+        else:
+            m = metrika.get_stats_demo(project_name)
 
         rows.append({
             "project":     project_name,
