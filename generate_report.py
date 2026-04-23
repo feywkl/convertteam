@@ -16,8 +16,7 @@ import direct
 import metrika
 
 # ── режим: DEMO если токены пустые, LIVE если заполнены ──────────────────────
-# Принудительно включен демо-режим для тестирования:
-DEMO_MODE = True
+DEMO_MODE = not (config.DIRECT_TOKEN and config.METRIKA_TOKEN)
 GOOGLE_READY = bool(config.GOOGLE_SHEET_URL)
 
 if DEMO_MODE:
