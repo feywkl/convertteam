@@ -29,34 +29,46 @@ if not GOOGLE_READY:
 def collect_data() -> list[dict]:
     """Собирает данные по всем проектам из конфига."""
     rows = []
-    for project_name in config.PROJECTS:
+    
+    # Итерируемся по словарю с распаковкой ключа и значения
+    for project_name, campaign_id in config.PROJECTS.items():
         print(f"  → {project_name} ...", end=" ")
 
-        d = direct.get_stats(
-            token=config.DIRECT_TOKEN,
-            client_login=config.DIRECT_CLIENT_LOGIN,
-            date_from=config.DATE_FROM,
-            date_to=config.DATE_TO,
-        )
+        try:
+            # Формируем список кампаний, если ID передан
+            camp_ids_list = [campaign_id] if campaign_id else None
 
-        m = metrika.get_stats(
-            token=config.METRIKA_TOKEN,
-            counter_id=config.METRIKA_COUNTER_ID,
-            date_from=config.DATE_FROM,
-            date_to=config.DATE_TO,
-            goal_id=config.METRIKA_GOAL_ID
-        )
+            d = direct.get_stats(
+                token=config.DIRECT_TOKEN,
+                client_login=config.DIRECT_CLIENT_LOGIN,
+                date_from=config.DATE_FROM,
+                date_to=config.DATE_TO,
+                campaign_ids=camp_ids_list
+            )
 
-        rows.append({
-            "project":     project_name,
-            "impressions": d["impressions"],
-            "clicks":      d["clicks"],
-            "cost":        d["cost"],
-            "conversions": d["conversions"],
-            "sessions":    m["sessions"],
-            "bounce_rate": m["bounceRate"],
-        })
-        print("OK")
+            m = metrika.get_stats(
+                token=config.METRIKA_TOKEN,
+                counter_id=config.METRIKA_COUNTER_ID,
+                date_from=config.DATE_FROM,
+                date_to=config.DATE_TO,
+                goal_id=config.METRIKA_GOAL_ID
+            )
+
+            rows.append({
+                "project":     project_name,
+                "impressions": d["impressions"],
+                "clicks":      d["clicks"],
+                "cost":        d["cost"],
+                "conversions": d["conversions"],
+                "sessions":    m["sessions"],
+                "bounce_rate": m["bounceRate"],
+            })
+            print("OK")
+            
+        except Exception as e:
+            print(f"❌ Ошибка: {e}")
+            # Не прерываем скрипт, продолжаем со следующим проектом
+            continue
 
     return rows
 
