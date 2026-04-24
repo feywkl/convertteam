@@ -7,13 +7,6 @@ import requests
 
 METRIKA_API_URL = "https://api-metrika.yandex.net/stat/v1/data"
 
-DEMO_DATA = {
-    "Проект А": {"sessions": 980,  "bounceRate": 42.1},
-    "Проект Б": {"sessions": 650,  "bounceRate": 38.5},
-    "Проект В": {"sessions": 1720, "bounceRate": 35.8},
-}
-
-
 def get_stats(token: str, counter_id: str, date_from: str, date_to: str, goal_id: str = None) -> dict:
     """
     Запрашивает сессии, отказы и конкретную цель из Метрики по её ID
@@ -48,10 +41,3 @@ def get_stats(token: str, counter_id: str, date_from: str, date_to: str, goal_id
         result["goal_conversions"] = int(totals[2]) if len(totals) > 2 else 0
         
     return result
-
-
-def get_stats_demo(project_name: str) -> dict:
-    """Возвращает демо-данные."""
-    return DEMO_DATA.get(project_name, {
-        "sessions": 500, "bounceRate": 45.0
-    })

@@ -1,21 +1,9 @@
-"""
-Модуль для получения статистики из Яндекс.Директ API v5
-Документация: https://yandex.ru/dev/direct/doc/reports/
-"""
-
 import requests
 import json
 import time
 from datetime import date, timedelta
 
 DIRECT_API_URL = "https://api.direct.yandex.com/json/v5/reports"
-
-DEMO_DATA = {
-    "Проект А": {"impressions": 45230, "clicks": 1240, "cost": 28500.0, "conversions": 34},
-    "Проект Б": {"impressions": 28110, "clicks": 890,  "cost": 19200.0, "conversions": 21},
-    "Проект В": {"impressions": 61450, "clicks": 2100, "cost": 47800.0, "conversions": 58},
-}
-
 
 def get_stats(token: str, client_login: str, date_from: str, date_to: str,
               campaign_ids: list = None) -> dict:
@@ -81,10 +69,3 @@ def _parse_tsv(tsv_text: str) -> dict:
             break
 
     return result
-
-
-def get_stats_demo(project_name: str) -> dict:
-    """Возвращает демо-данные для презентации без реального токена."""
-    return DEMO_DATA.get(project_name, {
-        "impressions": 10000, "clicks": 300, "cost": 5000.0, "conversions": 10
-    })
