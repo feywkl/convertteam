@@ -39,6 +39,8 @@ def get_stats(token: str, client_login: str, date_from: str, date_to: str,
 
     for attempt in range(5):
         resp = requests.post(DIRECT_API_URL, headers=headers, data=json.dumps(body))
+        resp.encoding = 'utf-8'  # Принудительно ставим UTF-8, чтобы ошибки читались по-русски
+        
         if resp.status_code == 200:
             return _parse_tsv(resp.text)
         elif resp.status_code == 201 or resp.status_code == 202:
