@@ -19,19 +19,16 @@ jobs:
         python-version: '3.10'
 
     - name: Установка библиотек
-      run: pip install requests gspread openpyxl
-
-    - name: Создание файлов из секретов через Python
-      env:
-        GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
-        CLIENTS: ${{ secrets.CLIENTS }}
-      run: |
-        python -c "import os; open('credentials.json', 'w', encoding='utf-8').write(os.environ.get('GOOGLE_CREDENTIALS', '{}'))"
-        python -c "import os; open('clients.json', 'w', encoding='utf-8').write(os.environ.get('CLIENTS', '[]'))"
+      run: pip install requests gspread openpyxl python-dotenv
 
     - name: Запуск скрипта генерации
       env:
         DIRECT_TOKEN: ${{ secrets.DIRECT_TOKEN }}
         METRIKA_TOKEN: ${{ secrets.METRIKA_TOKEN }}
         GOOGLE_SHEET_URL: ${{ secrets.GOOGLE_SHEET_URL }}
-      run: python generate_report.py
+        GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+        CLIENTS: ${{ secrets.CLIENTS }}
+      run: |
+        echo "$CLIENTS" > clients.json
+        echo "$GOOGLE_CREDENTIALS" > credentials.json
+        python generate_report.py
