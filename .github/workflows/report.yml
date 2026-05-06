@@ -21,15 +21,13 @@ jobs:
     - name: Установка библиотек
       run: pip install requests gspread openpyxl
 
-    - name: Создание credentials.json из секрета
+    - name: Создание файлов из секретов через Python
       env:
-        FILE_CONTENT: ${{ secrets.GOOGLE_CREDENTIALS }}
-      run: echo "$FILE_CONTENT" > credentials.json
-
-    - name: Создание clients.json из секрета
-      env:
-        FILE_CONTENT: ${{ secrets.CLIENTS }}
-      run: echo "$FILE_CONTENT" > clients.json
+        GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+        CLIENTS: ${{ secrets.CLIENTS }}
+      run: |
+        python -c "import os; open('credentials.json', 'w', encoding='utf-8').write(os.environ.get('GOOGLE_CREDENTIALS', '{}'))"
+        python -c "import os; open('clients.json', 'w', encoding='utf-8').write(os.environ.get('CLIENTS', '[]'))"
 
     - name: Запуск скрипта генерации
       env:
