@@ -16,12 +16,18 @@ yesterday = (date.today() - timedelta(days=1)).strftime("%Y-%m-%d")
 DATE_FROM = yesterday
 DATE_TO   = yesterday
 
-# Список клиентов читается из clients.json — добавляй туда новых клиентов,
-# не трогая код. Формат каждого клиента:
-# { "name", "direct_login", "metrika_counter", "metrika_goal_id" }
 _clients_file = os.path.join(os.path.dirname(__file__), "clients.json")
-with open(_clients_file, encoding="utf-8") as _f:
-    PROJECTS = {c["name"]: c for c in json.load(_f)}
+try:
+    with open(_clients_file, encoding="utf-8") as _f:
+        _content = _f.read()
+        if not _content.strip():
+            print("ОШИБКА: Файл clients.json пуст! Проверьте секрет CLIENTS в GitHub Actions.")
+            PROJECTS = {}
+        else:
+            PROJECTS = {c["name"]: c for c in json.loads(_content)}
+except Exception as e:
+    print(f"ОШИБКА при чтении файла clients.json: {e}")
+    PROJECTS = {}
 
 # Настройки Google Sheets
 GOOGLE_CREDENTIALS_FILE = "credentials.json"
