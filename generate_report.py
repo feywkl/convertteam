@@ -27,47 +27,47 @@ if not GOOGLE_READY:
 
 
 def collect_data() -> list[dict]:
-    """Собирает данные по всем проектам из конфига."""
+    """Собирает данные по всем клиентам из конфига, по дням."""
     rows = []
-    
-    # Итерируемся по словарю с распаковкой ключа и значения
-    for project_name, campaign_id in config.PROJECTS.items():
+
+    for project_name, cfg in config.PROJECTS.items():
         print(f"  → {project_name} ...", end=" ")
 
         try:
-            # Формируем список кампаний, если ID передан
-            camp_ids_list = [campaign_id] if campaign_id else None
-
-            d = direct.get_stats(
+            direct_rows  = direct.get_stats(
                 token=config.DIRECT_TOKEN,
-                client_login=config.DIRECT_CLIENT_LOGIN,
+                client_login=cfg["direct_login"],
                 date_from=config.DATE_FROM,
                 date_to=config.DATE_TO,
-                campaign_ids=camp_ids_list
             )
 
-            m = metrika.get_stats(
+            metrika_rows = metrika.get_stats(
                 token=config.METRIKA_TOKEN,
-                counter_id=config.METRIKA_COUNTER_ID,
+                counter_id=cfg["metrika_counter"],
                 date_from=config.DATE_FROM,
                 date_to=config.DATE_TO,
-                goal_id=config.METRIKA_GOAL_ID
+                goal_id=cfg["metrika_goal_id"]
             )
 
-            rows.append({
-                "project":     project_name,
-                "impressions": d["impressions"],
-                "clicks":      d["clicks"],
-                "cost":        d["cost"],
-                "conversions": d["conversions"],
-                "sessions":    m["sessions"],
-                "bounce_rate": m["bounceRate"],
-            })
-            print("OK")
-            
+            # Индексируем Метрику по дате для быстрого поиска
+            metrika_by_date = {r["date"]: r for r in metrika_rows}
+
+            for d in direct_rows:
+                m = metrika_by_date.get(d["date"], {"sessions": 0, "bounce_rate": 0.0})
+                rows.append({
+                    "project":     project_name,
+                    "date":        d["date"],
+                    "impressions": d["impressions"],
+                    "clicks":      d["clicks"],
+                    "cost":        d["cost"],
+                    "conversions": d["conversions"],
+                    "sessions":    m["sessions"],
+                })
+
+            print(f"OK ({len(direct_rows)} дней)")
+
         except Exception as e:
             print(f"❌ Ошибка: {e}")
-            # Не прерываем скрипт, продолжаем со следующим проектом
             continue
 
     return rows
@@ -90,8 +90,6 @@ def export_to_google_sheets(rows: list[dict]):
         print("Убедитесь, что файл credentials.json лежит в папке, а в таблице выдан доступ email'у из этого файла-ключа.")
         return
 
-    export_dt = date.today().strftime('%d.%m.%Y')
-    
     # Проверяем, есть ли уже заголовки в таблице. Если таблица пустая - добавляем их.
     existing_data = ws.get_all_values()
     # gspread может вернуть [[]] для пустой таблицы
@@ -109,43 +107,204 @@ def export_to_google_sheets(rows: list[dict]):
             "Конверсия сайта % (CR)"
         ]
         ws.append_row(headers)
+        existing_data = [headers]
 
     print("Добавление новых строк: ")
     # Собираем все строки для выгрузки массивом
     data_to_append = []
     
     for row in rows:
-        imp = row["impressions"]
-        clk = row["clicks"]
+        # Переводим дату из YYYY-MM-DD в DD.MM.YYYY
+        y, m, d = row["date"].split("-")
+        date_str = f"{d}.{m}.{y}"
+
+        imp  = row["impressions"]
+        clk  = row["clicks"]
         cost = row["cost"]
         conv = row["conversions"]
-        sess = row["sessions"]
-        bnc = row["bounce_rate"]
 
         ctr = round((clk / imp * 100) if imp > 0 else 0, 2)
         cpc = round((cost / clk) if clk > 0 else 0, 2)
-        # Рассчитываем CPA и CR (если конверсии берем из Директа: row["conversions"])
-        conv = row["conversions"]
-        sess = row["sessions"]
         cpa = round((cost / conv) if conv > 0 else 0, 2)
-        cr = round((conv / sess * 100) if sess > 0 else 0, 2)
+        cr  = round((conv / clk * 100) if clk > 0 else 0, 2)
 
-        # Новая структура: 1 колонка конверсии
         data_to_append.append([
-            export_dt,                   # Дата
-            f"р.{cost}".replace('.', ','), # Расход, в руб,
-            imp,                         # Количество показов
-            clk,                         # Кол-во кликов
-            f"р.{cpc}".replace('.', ','),  # CPC
-            f"{ctr}%".replace('.', ','),   # CTR (количество показов к кликам)
-            conv,                        # Кол-во конверсий
-            f"р.{cpa}".replace('.', ','),  # Стоимость конверсии (CPA)
-            f"{cr}%".replace('.', ',')     # Конверсия сайта % (CR)
+            date_str,                                          # Дата
+            "р." + str(round(cost, 2)).replace('.', ','),     # Расход, в руб
+            imp,                                              # Количество показов
+            clk,                                              # Кол-во кликов
+            "р." + str(round(cpc, 2)).replace('.', ','),      # CPC
+            str(round(ctr, 2)).replace('.', ',') + "%",       # CTR
+            conv,                                             # Кол-во конверсий
+            "р." + str(round(cpa, 2)).replace('.', ','),      # CPA
+            str(round(cr, 2)).replace('.', ',') + "%",        # CR
         ])
 
     # Пакетная выгрузка
-    ws.append_rows(data_to_append, value_input_option='USER_ENTERED')
-    print(f"✅ Успешно выгружено {len(data_to_append)} строк в таблицу: {sh.title}")
+    dates_to_replace = {r[0] for r in data_to_append if r and len(r) > 0}
+    rows_to_delete = []
+    
+    for idx, r in enumerate(existing_data[1:], start=2):  # пропускаем заголовок
+        if r and len(r) > 0:
+            if r[0] in dates_to_replace or str(r[0]).upper() == "ИТОГ":
+                rows_to_delete.append(idx)
+
+    remaining_rows = []
+    for idx, r in enumerate(existing_data[1:], start=2):
+        if idx not in rows_to_delete:
+            remaining_rows.append(r)
+
+    if rows_to_delete:
+        print(f"Найдено {len(rows_to_delete)} существующих строк (Итог или за те же даты) — перезаписываем...")
+        for idx in sorted(rows_to_delete, reverse=True):
+            ws.delete_rows(idx)
+
+    # Группируем все данные (старые + новые) по месяцам (Формат: MM.YYYY)
+    from collections import defaultdict
+    months_data = defaultdict(list)
+    
+    for r in remaining_rows + data_to_append:
+        if not r or len(r) == 0:
+            continue
+        date_val = r[0]
+        # Извлекаем месяц и год из формата DD.MM.YYYY
+        parts = date_val.split('.')
+        if len(parts) == 3:
+            # Унифицируем месяц (например, 4 и 04 -> 04), чтобы группировало корректно:
+            month_key = f"{int(parts[1]):02d}.{parts[2]}"
+            # (Опционально) приводим формат даты тоже к стандартному DD.MM.YYYY:
+            r[0] = f"{int(parts[0]):02d}.{int(parts[1]):02d}.{parts[2]}"
+            months_data[month_key].append(r)
+
+    # Очищаем таблицу от старых данных (оставляя только шапку)
+    # Это необходимо для ровной перезаписи по месяцам
+    ws.clear()
+    header_row = existing_data[0] if len(existing_data) > 0 else []
+    
+    current_row_idx = 1
+    bold_rows = []
+    all_final_rows = []
+
+    # Функция очистки чисел
+    def clean_num(v, is_float=False):
+        v = str(v).replace('р.', '').replace('p.', '').replace('%', '').replace('\xa0', '').replace(' ', '').replace(',', '.')
+        try:
+            return float(v) if is_float else int(float(v))
+        except:
+            return 0.0 if is_float else 0
+
+    # Сортируем месяцы (например, хронологически по году и месяцу)
+    def month_sort_key(m_str):
+        m, y = m_str.split('.')
+        return (int(y), int(m))
+        
+    sorted_months = sorted(months_data.keys(), key=month_sort_key)
+
+    for m_key in sorted_months:
+        # Добавляем шапку таблицы перед каждым новым месяцем и делаем ее жирной
+        if header_row:
+            all_final_rows.append(header_row)
+            bold_rows.append(current_row_idx)
+            current_row_idx += 1
+            
+        month_rows = months_data[m_key]
+        
+        # Сортируем строки внутри месяца по дате (дню)
+        month_rows.sort(key=lambda r: int(r[0].split('.')[0]) if len(r[0].split('.'))==3 else 0)
+        
+        total_cost = 0.0
+        total_imp = 0
+        total_clk = 0
+        total_conv = 0
+        
+        for r in month_rows:
+            all_final_rows.append(r)
+            current_row_idx += 1
+            if len(r) >= 7:
+                total_cost += clean_num(r[1], True)
+                total_imp  += clean_num(r[2], False)
+                total_clk  += clean_num(r[3], False)
+                total_conv += clean_num(r[6], False)
+
+        # Считаем итог по месяцу
+        ctr = round((total_clk / total_imp * 100) if total_imp > 0 else 0, 2)
+        cpc = round((total_cost / total_clk) if total_clk > 0 else 0, 2)
+        cpa = round((total_cost / total_conv) if total_conv > 0 else 0, 2)
+        cr  = round((total_conv / total_clk * 100) if total_clk > 0 else 0, 2)
+
+        # Форматирование чисел с разделителями тысяч (пробел) и запятой для дробных
+        def format_num(val, is_currency=False):
+            if val == 0 and is_currency:
+                return "р.0,00"
+            elif val == 0:
+                return "0,00"
+            # Форматируем с запятой как разделитель тысяч, потом меняем запятую на пробел, а точку на запятую
+            # Для целых чисел (показы, клики) можно просто возвращать int, Google Sheets сам с ними справится
+            s = f"{val:,.2f}"
+            parts = s.split('.')
+            int_part = parts[0].replace(',', ' ')
+            dec_part = parts[1]
+            res = f"{int_part},{dec_part}"
+            if is_currency:
+                return f"р.{res}"
+            return res
+
+        itog_row = [
+            "ИТОГ",
+            format_num(total_cost, True),
+            total_imp,
+            total_clk,
+            format_num(cpc, True),
+            format_num(ctr).replace(',00', '') if ctr.is_integer() else format_num(ctr) + "%", # Упрощенно
+            total_conv,
+            format_num(cpa, True),
+            format_num(cr).replace(',00', '') if cr.is_integer() else format_num(cr) + "%"
+        ]
+        
+        # Исправляем формат % более надежно
+        itog_row[5] = f"{ctr:,.2f}".replace(',', ' ').replace('.', ',') + "%"
+        itog_row[8] = f"{cr:,.2f}".replace(',', ' ').replace('.', ',') + "%"
+
+        all_final_rows.append(itog_row)
+        bold_rows.append(current_row_idx)
+        current_row_idx += 1
+        
+        # Делаем отступ в 2 пустые строчки после итога каждого месяца
+        all_final_rows.append([])
+        all_final_rows.append([])
+        current_row_idx += 2
+
+    # Пакетно добавляем все отсортированные строки с итогами
+    ws.append_rows(all_final_rows, value_input_option='USER_ENTERED')
+    
+    # Форматирование итоговых строк (делаем жирными)
+    try:
+        requests = []
+        for b_idx in bold_rows:
+            requests.append({
+                "repeatCell": {
+                    "range": {
+                        "sheetId": ws.id,
+                        "startRowIndex": b_idx - 1,
+                        "endRowIndex": b_idx,
+                        "startColumnIndex": 0,
+                        "endColumnIndex": 9
+                    },
+                    "cell": {
+                        "userEnteredFormat": {
+                            "textFormat": {"bold": True}
+                        }
+                    },
+                    "fields": "userEnteredFormat.textFormat.bold"
+                }
+            })
+            
+        if requests:
+            sh.batch_update({"requests": requests})
+    except Exception as e:
+        print(f"⚠️  Не удалось применить жирный шрифт: {e}")
+
+    print(f"✅ Успешно выгружено {len(data_to_append)} строк + ИТОГИ по месяцам в таблицу: {sh.title}")
 
 
 if __name__ == "__main__":

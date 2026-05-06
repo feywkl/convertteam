@@ -1,4 +1,5 @@
 import os
+import json
 from datetime import date, timedelta
 try:
     from dotenv import load_dotenv
@@ -6,28 +7,21 @@ try:
 except ImportError:
     pass
 
-# Токены и доступы
-DIRECT_TOKEN = os.getenv("DIRECT_TOKEN", "")
-DIRECT_CLIENT_LOGIN = os.getenv("DIRECT_CLIENT_LOGIN", "")
+# Токены управляющего аккаунта (из .env / GitHub Secrets)
+DIRECT_TOKEN  = os.getenv("DIRECT_TOKEN", "")
 METRIKA_TOKEN = os.getenv("METRIKA_TOKEN", "")
-METRIKA_COUNTER_ID = os.getenv("METRIKA_COUNTER_ID", "")
 
-# ID конкретной цели из Метрики, если нужно считать только 1 спец. конверсию.
-# Если оставить пустым, будет браться сумма всех целей из Директа
-METRIKA_GOAL_ID = os.getenv("METRIKA_GOAL_ID", "")
+# Период отчёта — по умолчанию за вчерашний день (для ежедневного запуска)
+yesterday = (date.today() - timedelta(days=1)).strftime("%Y-%m-%d")
+DATE_FROM = yesterday
+DATE_TO   = yesterday
 
-# Период отчёта (по умолчанию за вчерашний день)
-DATE_FROM = (date.today() - timedelta(days=1)).strftime("%Y-%m-%d")
-DATE_TO   = (date.today() - timedelta(days=1)).strftime("%Y-%m-%d")
-
-# Проекты для выгрузки (Название: campaign_id или None для всех)
-PROJECTS = {
-    "Проект А": None,
-    "Проект Б": None,
-    "Проект В": None,
-}
-
-OUTPUT_PATH = "отчёт_реклама.xlsx"
+# Список клиентов читается из clients.json — добавляй туда новых клиентов,
+# не трогая код. Формат каждого клиента:
+# { "name", "direct_login", "metrika_counter", "metrika_goal_id" }
+_clients_file = os.path.join(os.path.dirname(__file__), "clients.json")
+with open(_clients_file, encoding="utf-8") as _f:
+    PROJECTS = {c["name"]: c for c in json.load(_f)}
 
 # Настройки Google Sheets
 GOOGLE_CREDENTIALS_FILE = "credentials.json"

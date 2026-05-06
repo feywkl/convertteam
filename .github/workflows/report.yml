@@ -22,13 +22,14 @@ jobs:
       run: pip install requests gspread openpyxl
 
     - name: Создание credentials.json из секрета
-      # Берем содержимое JSON из секретов GitHub и сохраняем локально, чтобы скрипт мог его прочитать
       run: echo '${{ secrets.GOOGLE_CREDENTIALS }}' > credentials.json
+
+    - name: Создание clients.json из секрета
+      run: echo '${{ secrets.CLIENTS }}' > clients.json
 
     - name: Запуск скрипта генерации
       env:
         DIRECT_TOKEN: ${{ secrets.DIRECT_TOKEN }}
         METRIKA_TOKEN: ${{ secrets.METRIKA_TOKEN }}
-        METRIKA_COUNTER_ID: ${{ secrets.METRIKA_COUNTER_ID }}
         GOOGLE_SHEET_URL: ${{ secrets.GOOGLE_SHEET_URL }}
       run: python generate_report.py
