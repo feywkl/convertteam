@@ -22,16 +22,14 @@ jobs:
       run: pip install requests gspread openpyxl
 
     - name: Создание credentials.json из секрета
-      run: |
-        cat << 'EOF' > credentials.json
-        ${{ secrets.GOOGLE_CREDENTIALS }}
-        EOF
+      env:
+        FILE_CONTENT: ${{ secrets.GOOGLE_CREDENTIALS }}
+      run: echo "$FILE_CONTENT" > credentials.json
 
     - name: Создание clients.json из секрета
-      run: |
-        cat << 'EOF' > clients.json
-        ${{ secrets.CLIENTS }}
-        EOF
+      env:
+        FILE_CONTENT: ${{ secrets.CLIENTS }}
+      run: echo "$FILE_CONTENT" > clients.json
 
     - name: Запуск скрипта генерации
       env:
