@@ -277,12 +277,52 @@ def export_to_google_sheets(rows: list[dict]):
     # Пакетно добавляем все отсортированные строки с итогами
     ws.append_rows(all_final_rows, value_input_option='USER_ENTERED')
     
-    # Форматирование итоговых строк (делаем жирными)
+    # Форматирование: сбрасываем старое и рисуем жирные границы ("полоски по бокам") вместо жирного текста
     try:
         requests = []
+        
+        # 1. Убираем старый жирный шрифт везде, чтобы новые строки случайно не становились жирными
+        requests.append({
+            "repeatCell": {
+                "range": {
+                    "sheetId": ws.id,
+                    "startRowIndex": 0,
+                    "endRowIndex": 1000,
+                    "startColumnIndex": 0,
+                    "endColumnIndex": 10
+                },
+                "cell": {
+                    "userEnteredFormat": {
+                        "textFormat": {"bold": False}
+                    }
+                },
+                "fields": "userEnteredFormat.textFormat.bold"
+            }
+        })
+        
+        # 2. Очищаем все старые границы, чтобы они не наслаивались
+        requests.append({
+            "updateBorders": {
+                "range": {
+                    "sheetId": ws.id,
+                    "startRowIndex": 0,
+                    "endRowIndex": 1000,
+                    "startColumnIndex": 0,
+                    "endColumnIndex": 10
+                },
+                "top": {"style": "NONE"},
+                "bottom": {"style": "NONE"},
+                "left": {"style": "NONE"},
+                "right": {"style": "NONE"},
+                "innerHorizontal": {"style": "NONE"},
+                "innerVertical": {"style": "NONE"},
+            }
+        })
+
+        # 3. Делаем выделение нужных строк (Заголовок и Итог) через прямоугольную границу
         for b_idx in bold_rows:
             requests.append({
-                "repeatCell": {
+                "updateBorders": {
                     "range": {
                         "sheetId": ws.id,
                         "startRowIndex": b_idx - 1,
@@ -290,19 +330,17 @@ def export_to_google_sheets(rows: list[dict]):
                         "startColumnIndex": 0,
                         "endColumnIndex": 9
                     },
-                    "cell": {
-                        "userEnteredFormat": {
-                            "textFormat": {"bold": True}
-                        }
-                    },
-                    "fields": "userEnteredFormat.textFormat.bold"
+                    "top": {"style": "SOLID_MEDIUM"},
+                    "bottom": {"style": "SOLID_MEDIUM"},
+                    "left": {"style": "SOLID_MEDIUM"},
+                    "right": {"style": "SOLID_MEDIUM"}
                 }
             })
             
         if requests:
             sh.batch_update({"requests": requests})
     except Exception as e:
-        print(f"⚠️  Не удалось применить жирный шрифт: {e}")
+        print(f"⚠️  Не удалось применить форматирование рамок: {e}")
 
     print(f"✅ Успешно выгружено {len(data_to_append)} строк + ИТОГИ по месяцам в таблицу: {sh.title}")
 
