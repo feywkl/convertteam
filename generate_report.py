@@ -84,17 +84,40 @@ def export_to_google_sheets(rows: list[dict]):
     try:
         gc = gspread.service_account(filename=config.GOOGLE_CREDENTIALS_FILE)
         sh = gc.open_by_url(config.GOOGLE_SHEET_URL)
-        ws = sh.sheet1  # Берём первый лист, либо можно по имени: sh.worksheet("Название")
     except Exception as e:
         print(f"❌ Ошибка подключения к Google Sheets: {e}")
         print("Убедитесь, что файл credentials.json лежит в папке, а в таблице выдан доступ email'у из этого файла-ключа.")
         return
 
+    # Группируем строки по проектам
+    from collections import defaultdict
+    projects_data = defaultdict(list)
+    for r in rows:
+        projects_data[r["project"]].append(r)
+
+    for project_name, proj_rows in projects_data.items():
+        # Определяем имя листа
+        cfg = config.PROJECTS.get(project_name, {})
+        sheet_name = cfg.get("worksheet_name", project_name)
+
+        print(f"\nВыгрузка клиента '{project_name}' на лист '{sheet_name}'...")
+        
+        # Пытаемся открыть лист. Если его нет - создаем
+        try:
+            ws = sh.worksheet(sheet_name)
+        except gspread.exceptions.WorksheetNotFound:
+            print(f"  Лист '{sheet_name}' не найден, создаю новый...")
+            ws = sh.add_worksheet(title=sheet_name, rows="1000", cols="10")
+
+        _export_to_worksheet(sh, ws, proj_rows)
+
+
+def _export_to_worksheet(sh, ws, rows: list[dict]):
     # Проверяем, есть ли уже заголовки в таблице. Если таблица пустая - добавляем их.
     existing_data = ws.get_all_values()
     # gspread может вернуть [[]] для пустой таблицы
     if not existing_data or not any(existing_data[0]):
-        print("Таблица пустая, добавляем заголовки...")
+        print("  Таблица пустая, добавляем заголовки...")
         headers = [
             "Дата", 
             "Расход, в руб,", 
@@ -342,7 +365,7 @@ def export_to_google_sheets(rows: list[dict]):
     except Exception as e:
         print(f"⚠️  Не удалось применить форматирование рамок: {e}")
 
-    print(f"✅ Успешно выгружено {len(data_to_append)} строк + ИТОГИ по месяцам в таблицу: {sh.title}")
+    print(f"✅ Успешно выгружено {len(data_to_append)} строк + ИТОГИ по месяцам на лист: {ws.title}")
 
 
 if __name__ == "__main__":
