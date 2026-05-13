@@ -13,15 +13,15 @@ METRIKA_TOKEN = os.getenv("METRIKA_TOKEN", "")
 
 # Период отчёта — по умолчанию за вчерашний день (для ежедневного запуска)
 yesterday = (date.today() - timedelta(days=1)).strftime("%Y-%m-%d")
-DATE_FROM = os.getenv("DATE_FROM", yesterday)
-DATE_TO   = os.getenv("DATE_TO", yesterday)
+DATE_FROM = os.getenv("DATE_FROM") or yesterday
+DATE_TO   = os.getenv("DATE_TO") or yesterday
 
 _clients_file = os.path.join(os.path.dirname(__file__), "clients.json")
 try:
     with open(_clients_file, encoding="utf-8") as _f:
         _content = _f.read()
         if not _content.strip():
-            print("ОШИБКА: Файл clients.json пуст! Проверьте секрет CLIENTS в GitHub Actions.")
+            print("ОШИБКА: Файл clients.json пуст! Заполните clients.json в репозитории.")
             PROJECTS = {}
         else:
             PROJECTS = {c["name"]: c for c in json.loads(_content)}

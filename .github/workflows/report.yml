@@ -4,6 +4,15 @@ on:
   schedule:
     - cron: '0 * * * *'
   workflow_dispatch:
+    inputs:
+      date_from:
+        description: 'Дата начала (YYYY-MM-DD), опционально'
+        required: false
+        default: ''
+      date_to:
+        description: 'Дата конца (YYYY-MM-DD), опционально'
+        required: false
+        default: ''
 
 jobs:
   update-report:
@@ -27,6 +36,8 @@ jobs:
         METRIKA_TOKEN: ${{ secrets.METRIKA_TOKEN }}
         GOOGLE_SHEET_URL: ${{ secrets.GOOGLE_SHEET_URL }}
         GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+        DATE_FROM: ${{ inputs.date_from }}
+        DATE_TO: ${{ inputs.date_to }}
       run: |
         echo "$GOOGLE_CREDENTIALS" > credentials.json
         python generate_report.py
