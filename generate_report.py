@@ -46,7 +46,7 @@ def collect_data() -> list[dict]:
                 counter_id=cfg["metrika_counter"],
                 date_from=config.DATE_FROM,
                 date_to=config.DATE_TO,
-                goal_id=cfg["metrika_goal_id"]
+                goal_id=cfg.get("metrika_goal_id", "")
             )
 
             # Индексируем Метрику по дате для быстрого поиска

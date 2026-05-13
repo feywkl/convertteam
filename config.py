@@ -24,7 +24,11 @@ try:
             print("ОШИБКА: Файл clients.json пуст! Заполните clients.json в репозитории.")
             PROJECTS = {}
         else:
-            PROJECTS = {c["name"]: c for c in json.loads(_content)}
+            data = json.loads(_content)
+            if isinstance(data, list):
+                PROJECTS = {c["name"]: c for c in data}
+            else:
+                PROJECTS = data
 except Exception as e:
     print(f"ОШИБКА при чтении файла clients.json: {e}")
     PROJECTS = {}
