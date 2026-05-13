@@ -13,8 +13,8 @@ METRIKA_TOKEN = os.getenv("METRIKA_TOKEN", "")
 
 # Период отчёта — по умолчанию за вчерашний день (для ежедневного запуска)
 yesterday = (date.today() - timedelta(days=1)).strftime("%Y-%m-%d")
-DATE_FROM = yesterday
-DATE_TO   = yesterday
+DATE_FROM = os.getenv("DATE_FROM", yesterday)
+DATE_TO   = os.getenv("DATE_TO", yesterday)
 
 _clients_file = os.path.join(os.path.dirname(__file__), "clients.json")
 try:
