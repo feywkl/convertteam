@@ -1,25 +1,26 @@
 """
-Простой Telegram-бот для запуска выгрузки отчётов.
+Telegram-бот для запуска выгрузки отчётов с управлением администраторами.
 
-Примеры:
-  /report metall-cvt 2026-05-01
-  /report metall-cvt 2026-05
-  /report metall-cvt 01.01.2026-02.01.2026
+Команды пользователя:
+  /report <client_id> <period>  — запустить отчёт
 
-Период:
-  - одна дата => один день
-  - YYYY-MM => весь месяц
-  - диапазон дат => inclusive range
+Админ-команды:
+  /myid                        — показать свой chat_id и username
+  /addadmin <chat_id|@ник>     — добавить администратора
+  /removeadmin <chat_id>       — удалить администратора
+  /admins                      — список администраторов
 """
 
 from __future__ import annotations
 
 import calendar
+import json
 import os
 import re
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from datetime import date, datetime, timedelta
+from pathlib import Path
 
 import requests
 
@@ -32,6 +33,10 @@ TELEGRAM_ALLOWED_CHAT_IDS = {
     x.strip() for x in os.getenv("TELEGRAM_ALLOWED_CHAT_IDS", "").split(",") if x.strip()
 }
 
+ALLOWLIST_FILE = Path(__file__).with_name("telegram_allowlist.json")
+ADMINS_FILE = Path(__file__).with_name("admins.json")
+USERS_REGISTRY_FILE = Path(__file__).with_name("users_registry.json")
+
 API_BASE = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
 
 
@@ -42,8 +47,83 @@ class Period:
     label: str
 
 
+@dataclass
+class Admin:
+    chat_id: str
+    username: str = ""
+
+
 def _send_message(chat_id: int | str, text: str):
     requests.post(f"{API_BASE}/sendMessage", json={"chat_id": chat_id, "text": text})
+
+
+def _load_admins() -> dict[str, Admin]:
+    """Загрузить список администраторов из файла."""
+    if ADMINS_FILE.exists():
+        try:
+            data = json.loads(ADMINS_FILE.read_text(encoding="utf-8"))
+            return {str(k): Admin(**v) if isinstance(v, dict) else v for k, v in data.items()}
+        except Exception:
+            pass
+    return {}
+
+
+def _save_admins(admins: dict[str, Admin]):
+    """Сохранить список администраторов."""
+    data = {k: asdict(v) for k, v in admins.items()}
+    ADMINS_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _load_allowlist() -> set[str]:
+    """Загрузить разрешённые chat_id."""
+    file_ids: set[str] = set()
+    if ALLOWLIST_FILE.exists():
+        try:
+            data = json.loads(ALLOWLIST_FILE.read_text(encoding="utf-8"))
+            if isinstance(data, list):
+                file_ids = {str(item) for item in data}
+        except Exception:
+            file_ids = set()
+    return file_ids | TELEGRAM_ALLOWED_CHAT_IDS
+
+
+def _save_allowlist(chat_ids: set[str]):
+    """Сохранить разрешённые chat_id."""
+    ALLOWLIST_FILE.write_text(json.dumps(sorted(chat_ids), ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _load_users_registry() -> dict[str, str]:
+    """Загрузить маппинг username -> chat_id."""
+    if USERS_REGISTRY_FILE.exists():
+        try:
+            return json.loads(USERS_REGISTRY_FILE.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    return {}
+
+
+def _save_users_registry(registry: dict[str, str]):
+    """Сохранить маппинг username -> chat_id."""
+    USERS_REGISTRY_FILE.write_text(json.dumps(registry, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _register_user(chat_id: str, username: str = ""):
+    """Зарегистрировать пользователя."""
+    if not username:
+        return
+    registry = _load_users_registry()
+    registry[f"@{username.lstrip('@')}"] = chat_id
+    _save_users_registry(registry)
+
+
+def _is_admin(chat_id: int | str) -> bool:
+    """Проверить, является ли пользователь администратором."""
+    return str(chat_id) in _load_admins()
+
+
+def _is_allowed_chat(chat_id: int | str) -> bool:
+    """Проверить, разрешён ли доступ пользователю."""
+    return str(chat_id) in _load_allowlist() or _is_admin(chat_id)
 
 
 def _parse_client(client_token: str) -> tuple[str, str]:
@@ -112,19 +192,15 @@ def _parse_period(period_token: str) -> Period:
 
 def _help_text() -> str:
     return (
-        "Команда:\n"
+        "📋 Команда:\n"
         "/report <client_id> <period>\n\n"
-        "Период можно задавать так:\n"
+        "📅 Период:\n"
         "- одна дата: 2026-05-06 или 06.05.2026\n"
         "- месяц: 2026-05 или month:2026-05\n"
-        "- диапазон: 01.01.2026-02.01.2026 или 2026-01-01:2026-01-31\n\n"
+        "- диапазон: 01.01.2026-02.01.2026\n\n"
         "Пример:\n"
         "/report metall-cvt 01.01.2026-02.01.2026"
     )
-
-
-def _is_allowed_chat(chat_id: int | str) -> bool:
-    return not TELEGRAM_ALLOWED_CHAT_IDS or str(chat_id) in TELEGRAM_ALLOWED_CHAT_IDS
 
 
 def _handle_report(chat_id: int, args: list[str]):
@@ -139,26 +215,93 @@ def _handle_report(chat_id: int, args: list[str]):
         client_key, worksheet_name = _parse_client(client_token)
         period = _parse_period(period_token)
     except Exception as exc:
-        _send_message(chat_id, f"Ошибка: {exc}\n\n{_help_text()}")
+        _send_message(chat_id, f"❌ Ошибка: {exc}\n\n{_help_text()}")
         return
 
     try:
-        _send_message(chat_id, f"Запускаю отчёт для {client_key} за {period.label}...")
+        _send_message(chat_id, f"⏳ Запускаю отчёт для {client_key} за {period.label}...")
         rows = collect_data(period.date_from, period.date_to, client_key=client_key)
         written = write_rows_to_sheet(rows)
         _send_message(
             chat_id,
-            f"Готово. Клиент: {client_key} ({worksheet_name})\nПериод: {period.label}\nВыгружено строк: {written}",
+            f"✅ Готово!\n📊 Клиент: {client_key} ({worksheet_name})\n📅 Период: {period.label}\n📈 Выгружено строк: {written}",
         )
     except Exception as exc:
-        _send_message(chat_id, f"Не удалось сформировать отчёт: {exc}")
+        _send_message(chat_id, f"❌ Ошибка: {exc}")
+
+
+def _handle_admin(chat_id: int, command: str, args: list[str]):
+    if not _is_admin(chat_id):
+        _send_message(chat_id, "❌ У вас нет прав администратора.")
+        return
+
+    command = command.lower()
+
+    if command == "/myid":
+        _send_message(chat_id, f"👤 Ваш chat_id: `{chat_id}`")
+        return
+
+    if command == "/admins":
+        admins = _load_admins()
+        if not admins:
+            _send_message(chat_id, "📭 Список администраторов пуст.")
+            return
+        lines = ["👨‍💼 Администраторы:"]
+        for admin_id, admin in sorted(admins.items()):
+            username_str = f" (@{admin.username})" if admin.username else ""
+            lines.append(f"  • {admin_id}{username_str}")
+        _send_message(chat_id, "\n".join(lines))
+        return
+
+    if command == "/addadmin":
+        if not args:
+            _send_message(chat_id, "❌ Укажите chat_id или @ник\n\nПример:\n/addadmin 123456789\nили\n/addadmin @username")
+            return
+        identifier = args[0].strip()
+        admins = _load_admins()
+        username = ""
+
+        if identifier.startswith("@"):
+            registry = _load_users_registry()
+            found_chat_id = registry.get(identifier)
+            if not found_chat_id:
+                _send_message(chat_id, f"❌ Пользователь {identifier} не найден. Попросите его написать боту хотя бы один раз.")
+                return
+            identifier = found_chat_id
+            username = identifier.lstrip("@")
+
+        if identifier in admins:
+            _send_message(chat_id, f"ℹ️ chat_id {identifier} уже администратор.")
+            return
+
+        admins[identifier] = Admin(chat_id=identifier, username=username)
+        _save_admins(admins)
+        _send_message(chat_id, f"✅ chat_id {identifier} добавлен в администраторы.")
+        return
+
+    if command == "/removeadmin":
+        if not args:
+            _send_message(chat_id, "❌ Укажите chat_id\n\nПример:\n/removeadmin 123456789")
+            return
+        admin_id = args[0].strip()
+        admins = _load_admins()
+
+        if admin_id not in admins:
+            _send_message(chat_id, f"❌ chat_id {admin_id} не является администратором.")
+            return
+
+        del admins[admin_id]
+        _save_admins(admins)
+        _send_message(chat_id, f"✅ chat_id {admin_id} удалён из администраторов.")
+        return
 
 
 def run_bot():
     if not TELEGRAM_BOT_TOKEN:
-        raise RuntimeError("TELEGRAM_BOT_TOKEN не задан")
+        raise RuntimeError("❌ TELEGRAM_BOT_TOKEN не задан")
 
     offset = 0
+    print("🤖 Telegram-бот запущен...")
 
     while True:
         try:
@@ -178,7 +321,16 @@ def run_bot():
 
                 chat = message.get("chat", {})
                 chat_id = chat.get("id")
-                if chat_id is None or not _is_allowed_chat(chat_id):
+                chat_username = chat.get("username", "")
+
+                if chat_id is None:
+                    continue
+
+                # Регистрируем пользователя
+                _register_user(str(chat_id), chat_username)
+
+                # Проверяем доступ
+                if not _is_allowed_chat(chat_id):
                     continue
 
                 text = (message.get("text") or "").strip()
@@ -187,6 +339,13 @@ def run_bot():
 
                 if text.startswith("/start") or text.startswith("/help"):
                     _send_message(chat_id, _help_text())
+                    continue
+
+                if text.startswith("/myid") or text.startswith("/addadmin") or text.startswith("/removeadmin") or text.startswith("/admins"):
+                    parts = text.split(maxsplit=1)
+                    command = parts[0]
+                    args = parts[1].split() if len(parts) > 1 else []
+                    _handle_admin(chat_id, command, args)
                     continue
 
                 if text.startswith("/report"):
@@ -202,7 +361,7 @@ def run_bot():
                 _send_message(chat_id, _help_text())
 
         except Exception as exc:
-            print(f"Telegram bot error: {exc}")
+            print(f"❌ Telegram bot error: {exc}")
             time.sleep(5)
 
 

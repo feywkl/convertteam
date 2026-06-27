@@ -3,4 +3,7 @@ __pycache__/
 .DS_Store
 credentials.json
 .env
+telegram_allowlist.json
+admins.json
+users_registry.json
 отчёт_реклама.xlsx
