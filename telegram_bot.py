@@ -54,7 +54,10 @@ class Admin:
 
 
 def _send_message(chat_id: int | str, text: str):
-    requests.post(f"{API_BASE}/sendMessage", json={"chat_id": chat_id, "text": text})
+    try:
+        requests.post(f"{API_BASE}/sendMessage", json={"chat_id": chat_id, "text": text}, timeout=10)
+    except Exception as exc:
+        print(f"❌ Ошибка отправки сообщения: {exc}")
 
 
 def _load_admins() -> dict[str, Admin]:
@@ -302,6 +305,7 @@ def run_bot():
 
     offset = 0
     print("🤖 Telegram-бот запущен...")
+    print(f"📌 Разрешённые chat_id (из env): {TELEGRAM_ALLOWED_CHAT_IDS}")
 
     while True:
         try:
@@ -330,7 +334,10 @@ def run_bot():
                 _register_user(str(chat_id), chat_username)
 
                 # Проверяем доступ
-                if not _is_allowed_chat(chat_id):
+                is_allowed = _is_allowed_chat(chat_id)
+                print(f"📥 Сообщение от {chat_id} (@{chat_username}): {message.get('text', '')[:50]}")
+                print(f"   ✓ Доступ разрешён: {is_allowed}")
+                if not is_allowed:
                     continue
 
                 text = (message.get("text") or "").strip()

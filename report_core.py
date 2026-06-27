@@ -93,19 +93,18 @@ def _clean_num(value, is_float: bool = False):
 
 def _prepare_rows_for_sheet(rows: list[dict]) -> tuple[list[list], list[int]]:
     if not rows:
-        return [HEADER_ROW], []
+        return [HEADER_ROW], [1]
 
     grouped = defaultdict(list)
     for row in rows:
         grouped[row["date"][:7]].append(row)
 
-    final_rows = [HEADER_ROW]
-    bold_row_indexes = [1]
-    current_row_idx = 2
+    final_rows = []
+    bold_row_indexes = []
+    current_row_idx = 1
 
     for month_key in sorted(grouped.keys()):
         month_rows = sorted(grouped[month_key], key=lambda r: r["date"])
-        month_start_row = current_row_idx
 
         final_rows.append(HEADER_ROW)
         bold_row_indexes.append(current_row_idx)
@@ -197,6 +196,8 @@ def write_rows_to_sheet(rows: list[dict]):
         ws.append_rows(prepared_rows, value_input_option="USER_ENTERED")
 
         requests = []
+        
+        # Форматирование заголовков (жирный текст и выравнивание)
         for bold_row in bold_rows:
             requests.append({
                 "repeatCell": {
@@ -209,10 +210,33 @@ def write_rows_to_sheet(rows: list[dict]):
                     },
                     "cell": {
                         "userEnteredFormat": {
-                            "textFormat": {"bold": True}
+                            "textFormat": {"bold": True},
+                            "horizontalAlignment": "CENTER",
+                            "verticalAlignment": "MIDDLE",
                         }
                     },
-                    "fields": "userEnteredFormat.textFormat.bold",
+                    "fields": "userEnteredFormat.textFormat.bold,userEnteredFormat.horizontalAlignment,userEnteredFormat.verticalAlignment",
+                }
+            })
+
+        # Выравнивание данных (вправо для цифр)
+        if prepared_rows:
+            total_rows = len(prepared_rows)
+            requests.append({
+                "repeatCell": {
+                    "range": {
+                        "sheetId": ws.id,
+                        "startRowIndex": 0,
+                        "endRowIndex": total_rows,
+                        "startColumnIndex": 1,
+                        "endColumnIndex": 9,
+                    },
+                    "cell": {
+                        "userEnteredFormat": {
+                            "horizontalAlignment": "RIGHT",
+                        }
+                    },
+                    "fields": "userEnteredFormat.horizontalAlignment",
                 }
             })
 
