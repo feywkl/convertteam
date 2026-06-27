@@ -193,3 +193,88 @@ python telegram_bot.py
 ### Данные не попадают в таблицу
 
 Проверьте, что у сервисного аккаунта есть доступ на редактирование к Google Sheets, и что `GOOGLE_CREDENTIALS` заполнен корректно.
+
+## 🚀 Деплой на Heroku
+
+Проект готов к запуску на Heroku. Вот полная инструкция:
+
+### 1. Установите Heroku CLI
+
+```bash
+brew tap heroku/brew && brew install heroku
+heroku login
+```
+
+### 2. Создайте приложение на Heroku
+
+```bash
+heroku create your-app-name
+```
+
+или используйте существующее:
+
+```bash
+heroku git:remote -a your-app-name
+```
+
+### 3. Установите все секреты в Heroku Config Vars
+
+```bash
+heroku config:set DIRECT_TOKEN="your_token"
+heroku config:set METRIKA_TOKEN="your_token"
+heroku config:set TELEGRAM_BOT_TOKEN="your_bot_token"
+heroku config:set GOOGLE_SHEET_URL="https://docs.google.com/..."
+heroku config:set GOOGLE_CREDENTIALS='{"type": "service_account", ...}'
+heroku config:set TELEGRAM_ALLOWED_CHAT_IDS="693673743,123456789"
+```
+
+**Важно:** `GOOGLE_CREDENTIALS` должен быть JSON-строкой без переносов. Если на macOS, используйте одинарные кавычки:
+
+```bash
+heroku config:set GOOGLE_CREDENTIALS='{"type":"service_account","project_id":"..."}'
+```
+
+### 4. Деплойте приложение
+
+```bash
+git push heroku main
+```
+
+### 5. Запустите worker
+
+```bash
+heroku ps:scale worker=1
+```
+
+### 6. Проверьте логи
+
+```bash
+heroku logs --tail
+```
+
+### Отключение бота
+
+```bash
+heroku ps:scale worker=0
+```
+
+### Проверка текущих переменных
+
+```bash
+heroku config
+```
+
+### Важные моменты для Heroku
+
+- **Procfile** уже включен в репозиторий (`worker: python3 telegram_bot.py`)
+- **requirements.txt** содержит все зависимости
+- Бот использует long-polling (не нужны вебхуки и входящие соединения)
+- Все токены хранятся в `Config Vars`, не в коде
+- Данные администраторов и пользователей хранятся в локальных JSON-файлах (обнулятся при рестарте Heroku, но можно добавить S3 для персистентности)
+
+### После деплоя
+
+1. Напишите боту в Telegram `/help`
+2. Выполните `/myid` чтобы узнать ваш chat_id
+3. Используйте `/addadmin <chat_id>` чтобы добавить администраторов
+4. Команда `/report` будет работать как обычно
