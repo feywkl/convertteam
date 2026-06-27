@@ -1,4 +1,4 @@
-# ✅ Чек-лист перед деплоем на Heroku
+# ✅ Чек-лист перед деплоем на Aeza VPS
 
 ## Безопасность ✓
 - [x] Все токены в переменных окружения (`.env` / GitHub Secrets)
@@ -19,37 +19,118 @@
 - [x] Обработка ошибок (сеть, API)
 
 ## Деплой ✓
-- [x] `Procfile` готов (`worker: python3 telegram_bot.py`)
 - [x] `requirements.txt` содержит все зависимости
-- [x] README.md с инструкциями Heroku
+- [x] README.md с инструкциями для VPS/Aeza
 - [x] GitHub Actions workflow для регулярного запуска
 
-## Что делать для деплоя на Heroku
+## Что делать для деплоя на Aeza VPS
 
-### 1. Создайте приложение
+### 1. Подключитесь к серверу
+
 ```bash
-heroku create your-app-name
-git push heroku main
+ssh root@your-server-ip
 ```
 
-### 2. Установите Config Vars (переменные окружения)
+Или используйте обычного пользователя с `sudo`.
+
+### 2. Установите зависимости на сервере
+
+Для Ubuntu/Debian:
+
 ```bash
-heroku config:set DIRECT_TOKEN="..."
-heroku config:set METRIKA_TOKEN="..."
-heroku config:set TELEGRAM_BOT_TOKEN="..."
-heroku config:set GOOGLE_SHEET_URL="..."
-heroku config:set GOOGLE_CREDENTIALS='{"type":"service_account",...}'
-heroku config:set TELEGRAM_ALLOWED_CHAT_IDS="693673743"
+apt update
+apt install -y python3 python3-venv python3-pip git
 ```
 
-### 3. Запустите worker
+### 3. Склонируйте проект
+
 ```bash
-heroku ps:scale worker=1
+git clone https://github.com/your-user/convertteam.git
+cd convertteam
 ```
 
-### 4. Проверьте логи
+### 4. Создайте виртуальное окружение и установите зависимости
+
 ```bash
-heroku logs --tail
+python3 -m venv .venv
+source .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+### 5. Создайте `.env` на сервере
+
+```bash
+cp .env.example .env
+nano .env
+```
+
+Заполните в `.env`:
+
+- `DIRECT_TOKEN`
+- `METRIKA_TOKEN`
+- `TELEGRAM_BOT_TOKEN`
+- `GOOGLE_SHEET_URL`
+- `TELEGRAM_ALLOWED_CHAT_IDS`
+- `DATE_FROM` и `DATE_TO`, если нужен ручной период по умолчанию
+
+`credentials.json` тоже нужно положить рядом с кодом, если бот будет писать в Google Sheets.
+
+### 6. Проверьте запуск вручную
+
+```bash
+source .venv/bin/activate
+python telegram_bot.py
+```
+
+### 7. Сделайте автозапуск через systemd
+
+Создайте файл `/etc/systemd/system/convertteam-bot.service`:
+
+```ini
+[Unit]
+Description=Convertteam Telegram Bot
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/convertteam
+EnvironmentFile=/opt/convertteam/.env
+ExecStart=/opt/convertteam/.venv/bin/python /opt/convertteam/telegram_bot.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Активируйте сервис:
+
+```bash
+systemctl daemon-reload
+systemctl enable convertteam-bot
+systemctl start convertteam-bot
+systemctl status convertteam-bot
+```
+
+### 8. Смотрите логи
+
+```bash
+journalctl -u convertteam-bot -f
+```
+
+### 9. Если нужен ручной отчёт по расписанию
+
+Используйте cron или GitHub Actions. На сервере можно добавить cron-задачу:
+
+```bash
+crontab -e
+```
+
+Пример:
+
+```cron
+0 * * * * cd /opt/convertteam && /opt/convertteam/.venv/bin/python generate_report.py >> /var/log/convertteam-report.log 2>&1
 ```
 
 ## Файлы в репозитории (за исключением секретов)
@@ -60,7 +141,7 @@ heroku logs --tail
 - `generate_report.py` — CLI для запуска отчетов
 - `telegram_bot.py` — основной бот с обработкой команд
 - `requirements.txt` — зависимости
-- `Procfile` — инструкция для Heroku
+- `Procfile` — запасной вариант для платформ с worker-моделью
 - `clients.json` — описание клиентов (без токенов)
 - `.github/workflows/report.yml` — автоматический запуск по расписанию
 - `README.md` — документация

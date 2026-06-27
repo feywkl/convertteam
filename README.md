@@ -112,7 +112,7 @@
 ### Опциональные секреты
 
 - `TELEGRAM_ALLOWED_CHAT_IDS` — список разрешённых chat_id через запятую
-- `TELEGRAM_ADMIN_CHAT_IDS` — список chat_id администраторов через запятую
+- `DATE_FROM` и `DATE_TO` — дефолтный период для CLI/cron, если нужен
 
 ### Как ограничен доступ к боту
 
@@ -125,13 +125,12 @@ Allowlist формируется из двух источников:
 
 Файл `telegram_allowlist.json` добавлен в `.gitignore`, чтобы одобренные chat_id не попали в репозиторий.
 
-Администраторы могут управлять allowlist прямо в Telegram:
+Администраторы управляются через файл `admins.json` и команды бота:
 
-- `/allow <chat_id>` — добавить пользователя
-- `/block <chat_id>` — убрать пользователя
-- `/users` — посмотреть текущий список
-
-Админ-команды доступны только chat_id из `TELEGRAM_ADMIN_CHAT_IDS`.
+- `/myid` — показать свой `chat_id`
+- `/addadmin <chat_id|@ник>` — добавить администратора
+- `/removeadmin <chat_id>` — удалить администратора
+- `/admins` — показать список администраторов
 
 Если `TELEGRAM_ALLOWED_CHAT_IDS` пустой, а `telegram_allowlist.json` тоже пустой, бот не будет пускать никого, пока админ не добавит первого пользователя.
 
@@ -184,7 +183,7 @@ python telegram_bot.py
 
 ### Бот ничего не делает
 
-Проверьте, что задан `TELEGRAM_BOT_TOKEN`, что ваш `chat_id` добавлен в allowlist, и что админский чат указан в `TELEGRAM_ADMIN_CHAT_IDS`.
+Проверьте, что задан `TELEGRAM_BOT_TOKEN`, что ваш `chat_id` добавлен в allowlist, и что вы добавлены в `admins.json`, если используете админские команды.
 
 ### Отчёт пустой
 
@@ -194,87 +193,120 @@ python telegram_bot.py
 
 Проверьте, что у сервисного аккаунта есть доступ на редактирование к Google Sheets, и что `GOOGLE_CREDENTIALS` заполнен корректно.
 
-## 🚀 Деплой на Heroku
+## 🚀 Деплой на Aeza VPS
 
-Проект готов к запуску на Heroku. Вот полная инструкция:
+Проект рассчитан на обычный VPS: бот запускается как `systemd`-сервис и слушает Telegram через long-polling.
 
-### 1. Установите Heroku CLI
-
-```bash
-brew tap heroku/brew && brew install heroku
-heroku login
-```
-
-### 2. Создайте приложение на Heroku
+### 1. Подключитесь к серверу
 
 ```bash
-heroku create your-app-name
+ssh root@your-server-ip
 ```
 
-или используйте существующее:
+Или используйте обычного пользователя с `sudo`.
+
+### 2. Установите зависимости на сервере
+
+Для Ubuntu/Debian:
 
 ```bash
-heroku git:remote -a your-app-name
+apt update
+apt install -y python3 python3-venv python3-pip git
 ```
 
-### 3. Установите все секреты в Heroku Config Vars
+### 3. Склонируйте проект
 
 ```bash
-heroku config:set DIRECT_TOKEN="your_token"
-heroku config:set METRIKA_TOKEN="your_token"
-heroku config:set TELEGRAM_BOT_TOKEN="your_bot_token"
-heroku config:set GOOGLE_SHEET_URL="https://docs.google.com/..."
-heroku config:set GOOGLE_CREDENTIALS='{"type": "service_account", ...}'
-heroku config:set TELEGRAM_ALLOWED_CHAT_IDS="693673743,123456789"
+git clone https://github.com/your-user/convertteam.git
+cd convertteam
 ```
 
-**Важно:** `GOOGLE_CREDENTIALS` должен быть JSON-строкой без переносов. Если на macOS, используйте одинарные кавычки:
+### 4. Создайте виртуальное окружение и установите зависимости
 
 ```bash
-heroku config:set GOOGLE_CREDENTIALS='{"type":"service_account","project_id":"..."}'
+python3 -m venv .venv
+source .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
 ```
 
-### 4. Деплойте приложение
+### 5. Создайте `.env` на сервере
 
 ```bash
-git push heroku main
+cp .env.example .env
+nano .env
 ```
 
-### 5. Запустите worker
+Заполните в `.env`:
+
+- `DIRECT_TOKEN`
+- `METRIKA_TOKEN`
+- `TELEGRAM_BOT_TOKEN`
+- `GOOGLE_SHEET_URL`
+- `TELEGRAM_ALLOWED_CHAT_IDS`
+
+Если отчёты будут запускаться по расписанию на сервере, можно добавить `DATE_FROM` и `DATE_TO`.
+
+`credentials.json` с сервисным аккаунтом Google нужно положить рядом с кодом и не добавлять в Git.
+
+### 6. Проверьте запуск вручную
 
 ```bash
-heroku ps:scale worker=1
+source .venv/bin/activate
+python telegram_bot.py
 ```
 
-### 6. Проверьте логи
+### 7. Настройте автозапуск через systemd
+
+Создайте файл `/etc/systemd/system/convertteam-bot.service`:
+
+```ini
+[Unit]
+Description=Convertteam Telegram Bot
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/convertteam
+EnvironmentFile=/opt/convertteam/.env
+ExecStart=/opt/convertteam/.venv/bin/python /opt/convertteam/telegram_bot.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Активируйте сервис:
 
 ```bash
-heroku logs --tail
+systemctl daemon-reload
+systemctl enable convertteam-bot
+systemctl start convertteam-bot
+systemctl status convertteam-bot
 ```
 
-### Отключение бота
+### 8. Смотрите логи
 
 ```bash
-heroku ps:scale worker=0
+journalctl -u convertteam-bot -f
 ```
 
-### Проверка текущих переменных
+### 9. Если нужен отчет по расписанию
+
+Используйте `cron` или GitHub Actions. Пример задачи:
 
 ```bash
-heroku config
+crontab -e
 ```
 
-### Важные моменты для Heroku
-
-- **Procfile** уже включен в репозиторий (`worker: python3 telegram_bot.py`)
-- **requirements.txt** содержит все зависимости
-- Бот использует long-polling (не нужны вебхуки и входящие соединения)
-- Все токены хранятся в `Config Vars`, не в коде
-- Данные администраторов и пользователей хранятся в локальных JSON-файлах (обнулятся при рестарте Heroku, но можно добавить S3 для персистентности)
+```cron
+0 * * * * cd /opt/convertteam && /opt/convertteam/.venv/bin/python generate_report.py >> /var/log/convertteam-report.log 2>&1
+```
 
 ### После деплоя
 
-1. Напишите боту в Telegram `/help`
-2. Выполните `/myid` чтобы узнать ваш chat_id
-3. Используйте `/addadmin <chat_id>` чтобы добавить администраторов
-4. Команда `/report` будет работать как обычно
+1. Напишите боту `/help`
+2. Выполните `/myid`, чтобы узнать свой `chat_id`
+3. Добавьте себя в `admins.json` один раз на сервере, если нужно, или через уже существующий админский доступ
+4. Используйте `/addadmin <chat_id>` для новых администраторов
