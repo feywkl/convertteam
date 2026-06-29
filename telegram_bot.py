@@ -25,7 +25,7 @@ from pathlib import Path
 import requests
 
 import config
-from report_core import collect_data, write_rows_to_sheet
+from report_core import collect_data, get_worksheet_url, write_rows_to_sheet
 
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
@@ -225,9 +225,10 @@ def _handle_report(chat_id: int, args: list[str]):
         _send_message(chat_id, f"⏳ Запускаю отчёт для {client_key} за {period.label}...")
         rows = collect_data(period.date_from, period.date_to, client_key=client_key)
         written = write_rows_to_sheet(rows)
+        worksheet_url = get_worksheet_url(worksheet_name)
         _send_message(
             chat_id,
-            f"✅ Готово!\n📊 Клиент: {client_key} ({worksheet_name})\n📅 Период: {period.label}\n📈 Выгружено строк: {written}",
+            f"✅ Готово!\n📊 Клиент: {client_key} ({worksheet_name})\n📅 Период: {period.label}\n📈 Выгружено строк: {written}\n🔗 Таблица: {worksheet_url}",
         )
     except Exception as exc:
         _send_message(chat_id, f"❌ Ошибка: {exc}")

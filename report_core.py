@@ -175,6 +175,15 @@ def _ensure_worksheet(sh, worksheet_name: str):
         return sh.add_worksheet(title=worksheet_name, rows=100, cols=20)
 
 
+def get_worksheet_url(worksheet_name: str) -> str:
+    """Вернуть прямую ссылку на лист Google Sheets по имени вкладки."""
+    gc = gspread.service_account(filename=config.GOOGLE_CREDENTIALS_FILE)
+    sh = gc.open_by_url(config.GOOGLE_SHEET_URL)
+    ws = _ensure_worksheet(sh, worksheet_name)
+    base_url = config.GOOGLE_SHEET_URL.split("#", 1)[0]
+    return f"{base_url}#gid={ws.id}"
+
+
 def write_rows_to_sheet(rows: list[dict]):
     if not rows:
         return 0
