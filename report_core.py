@@ -58,7 +58,7 @@ def collect_data(date_from: str, date_to: str, client_key: str = None, goal_id: 
         for direct_row in direct_rows:
             metrika_row = metrika_by_date.get(direct_row["date"], {"sessions": 0, "bounce_rate": 0.0})
             direct_conversions = direct_row["conversions"]
-            goal_conversions = metrika_row.get("goal_conversions") if resolved_goal_id else None
+            goal_conversions = (metrika_row.get("goal_conversions") or 0) if resolved_goal_id else None
             selected_conversions = goal_conversions if resolved_goal_id else direct_conversions
             rows.append({
                 "project": project_name,
@@ -120,8 +120,8 @@ def _prepare_rows_for_sheet(rows: list[dict]) -> tuple[list[list], list[int]]:
             imp = row["impressions"]
             clk = row["clicks"]
             cost = row["cost"]
-            conv = row["conversions"]
-            direct_conv = row.get("direct_conversions", 0)
+            conv = row.get("conversions") or 0
+            direct_conv = row.get("direct_conversions", 0) or 0
             goal_conv = row.get("goal_conversions")
             goal_conv_cell = goal_conv if goal_conv is not None else ""
 
@@ -147,8 +147,8 @@ def _prepare_rows_for_sheet(rows: list[dict]) -> tuple[list[list], list[int]]:
         total_cost = sum(row["cost"] for row in month_rows)
         total_imp = sum(row["impressions"] for row in month_rows)
         total_clk = sum(row["clicks"] for row in month_rows)
-        total_conv = sum(row["conversions"] for row in month_rows)
-        total_direct_conv = sum(row.get("direct_conversions", 0) for row in month_rows)
+        total_conv = sum((row.get("conversions") or 0) for row in month_rows)
+        total_direct_conv = sum((row.get("direct_conversions", 0) or 0) for row in month_rows)
         total_goal_conv = sum(row.get("goal_conversions", 0) or 0 for row in month_rows)
 
         ctr = round((total_clk / total_imp * 100) if total_imp > 0 else 0, 2)
