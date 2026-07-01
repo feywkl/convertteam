@@ -130,4 +130,3 @@ python telegram_bot.py
 - `telegram_bot.py` — логика Telegram-бота
 - `report_core.py` — сбор и запись отчёта
 - `config.py` — загрузка настроек из окружения
-- `DEPLOYMENT.md` — инструкция по запуску на сервере
