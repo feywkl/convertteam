@@ -189,13 +189,15 @@ def _parse_period(period_token: str) -> Period:
 def _help_text() -> str:
     return (
         "📋 Команда:\n"
-        "/report <client_id> <period>\n\n"
+        "/report <client_id> <period> [goal:<id>]\n\n"
         "📅 Период:\n"
         "- одна дата: 2026-05-06 или 06.05.2026\n"
         "- месяц: 2026-05 или month:2026-05\n"
         "- диапазон: 01.01.2026-02.01.2026\n\n"
+        "🎯 Цель Метрики (необязательно):\n"
+        "- goal:123456\n\n"
         "Пример:\n"
-        "/report metall-cvt 01.01.2026-02.01.2026"
+        "/report metall-cvt 01.01.2026-02.01.2026 goal:123456"
     )
 
 
@@ -205,7 +207,17 @@ def _handle_report(chat_id: int, args: list[str]):
         return
 
     client_token = args[0]
-    period_token = " ".join(args[1:]).strip()
+    goal_id = ""
+    period_tokens: list[str] = []
+
+    for token in args[1:]:
+        normalized = token.strip()
+        if normalized.startswith("goal:") or normalized.startswith("goal="):
+            goal_id = normalized.split("=", 1)[-1].split(":", 1)[-1].strip()
+            continue
+        period_tokens.append(normalized)
+
+    period_token = " ".join(period_tokens).strip()
 
     try:
         client_key, worksheet_name = _parse_client(client_token)
@@ -215,13 +227,15 @@ def _handle_report(chat_id: int, args: list[str]):
         return
 
     try:
-        _send_message(chat_id, f"⏳ Запускаю отчёт для {client_key} за {period.label}...")
-        rows = collect_data(period.date_from, period.date_to, client_key=client_key)
+        goal_part = f" (цель {goal_id})" if goal_id else ""
+        _send_message(chat_id, f"⏳ Запускаю отчёт для {client_key} за {period.label}{goal_part}...")
+        rows = collect_data(period.date_from, period.date_to, client_key=client_key, goal_id=goal_id)
         written = write_rows_to_sheet(rows)
         worksheet_url = get_worksheet_url(worksheet_name)
+        goal_notice = f"\n🎯 Цель: {goal_id}" if goal_id else ""
         _send_message(
             chat_id,
-            f"✅ Готово!\n📊 Клиент: {client_key} ({worksheet_name})\n📅 Период: {period.label}\n📈 Выгружено строк: {written}\n🔗 Таблица: {worksheet_url}",
+            f"✅ Готово!\n📊 Клиент: {client_key} ({worksheet_name})\n📅 Период: {period.label}{goal_notice}\n📈 Выгружено строк: {written}\n🔗 Таблица: {worksheet_url}",
         )
     except Exception as exc:
         _send_message(chat_id, f"❌ Ошибка: {exc}")
@@ -350,8 +364,9 @@ def run_bot():
                     continue
 
                 if text.startswith("/report"):
-                    parts = text.split(maxsplit=2)
-                    _handle_report(chat_id, parts[1:])
+                    parts = text.split(maxsplit=1)
+                    args = parts[1].split() if len(parts) > 1 else []
+                    _handle_report(chat_id, args)
                     continue
 
                 fallback_parts = text.split(maxsplit=1)

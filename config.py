@@ -12,6 +12,7 @@ except ImportError:
 DIRECT_TOKEN  = os.getenv("DIRECT_TOKEN", "")
 METRIKA_TOKEN = os.getenv("METRIKA_TOKEN", "")
 METRIKA_COUNTER_ID = os.getenv("METRIKA_COUNTER_ID", "").strip()
+METRIKA_GOAL_ID = os.getenv("METRIKA_GOAL_ID", "").strip()
 
 # Период отчёта — по умолчанию за вчерашний день (для ежедневного запуска)
 yesterday = (date.today() - timedelta(days=1)).strftime("%Y-%m-%d")

@@ -31,10 +31,12 @@ def _select_projects(client_key: str = None):
     return [(project_name, project_cfg)]
 
 
-def collect_data(date_from: str, date_to: str, client_key: str = None) -> list[dict]:
+def collect_data(date_from: str, date_to: str, client_key: str = None, goal_id: str | None = None) -> list[dict]:
     rows = []
 
     for project_name, cfg in _select_projects(client_key):
+        resolved_goal_id = goal_id or cfg.get("metrika_goal_id") or config.METRIKA_GOAL_ID or ""
+
         direct_rows = direct.get_stats(
             token=config.DIRECT_TOKEN,
             client_login=cfg["direct_login"],
@@ -47,13 +49,14 @@ def collect_data(date_from: str, date_to: str, client_key: str = None) -> list[d
             counter_id=cfg["metrika_counter"],
             date_from=date_from,
             date_to=date_to,
-            goal_id=cfg.get("metrika_goal_id", ""),
+            goal_id=resolved_goal_id,
         )
 
         metrika_by_date = {row["date"]: row for row in metrika_rows}
 
         for direct_row in direct_rows:
             metrika_row = metrika_by_date.get(direct_row["date"], {"sessions": 0, "bounce_rate": 0.0})
+            conversions = metrika_row.get("goal_conversions", direct_row["conversions"]) if resolved_goal_id else direct_row["conversions"]
             rows.append({
                 "project": project_name,
                 "worksheet_name": cfg.get("worksheet_name") or project_name,
@@ -61,9 +64,10 @@ def collect_data(date_from: str, date_to: str, client_key: str = None) -> list[d
                 "impressions": direct_row["impressions"],
                 "clicks": direct_row["clicks"],
                 "cost": direct_row["cost"],
-                "conversions": direct_row["conversions"],
+                "conversions": conversions,
                 "sessions": metrika_row["sessions"],
                 "bounce_rate": metrika_row.get("bounce_rate", 0.0),
+                "goal_id": resolved_goal_id,
             })
 
     return rows
