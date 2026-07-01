@@ -17,7 +17,8 @@ HEADER_ROW = [
     "Кол-во кликов",
     "CPC",
     "CTR (количество показов к кликам)",
-    "Кол-во конверсий",
+    "Конверсии Директ",
+    "Конверсии Метрика",
     "Стоимость конверсии (CPA)",
     "Конверсия сайта % (CR)",
 ]
@@ -56,7 +57,9 @@ def collect_data(date_from: str, date_to: str, client_key: str = None, goal_id: 
 
         for direct_row in direct_rows:
             metrika_row = metrika_by_date.get(direct_row["date"], {"sessions": 0, "bounce_rate": 0.0})
-            conversions = metrika_row.get("goal_conversions", direct_row["conversions"]) if resolved_goal_id else direct_row["conversions"]
+            direct_conversions = direct_row["conversions"]
+            goal_conversions = metrika_row.get("goal_conversions") if resolved_goal_id else None
+            selected_conversions = goal_conversions if resolved_goal_id else direct_conversions
             rows.append({
                 "project": project_name,
                 "worksheet_name": cfg.get("worksheet_name") or project_name,
@@ -64,7 +67,9 @@ def collect_data(date_from: str, date_to: str, client_key: str = None, goal_id: 
                 "impressions": direct_row["impressions"],
                 "clicks": direct_row["clicks"],
                 "cost": direct_row["cost"],
-                "conversions": conversions,
+                "conversions": selected_conversions,
+                "direct_conversions": direct_conversions,
+                "goal_conversions": goal_conversions,
                 "sessions": metrika_row["sessions"],
                 "bounce_rate": metrika_row.get("bounce_rate", 0.0),
                 "goal_id": resolved_goal_id,
@@ -116,6 +121,9 @@ def _prepare_rows_for_sheet(rows: list[dict]) -> tuple[list[list], list[int]]:
             clk = row["clicks"]
             cost = row["cost"]
             conv = row["conversions"]
+            direct_conv = row.get("direct_conversions", 0)
+            goal_conv = row.get("goal_conversions")
+            goal_conv_cell = goal_conv if goal_conv is not None else ""
 
             ctr = round((clk / imp * 100) if imp > 0 else 0, 2)
             cpc = round((cost / clk) if clk > 0 else 0, 2)
@@ -129,7 +137,8 @@ def _prepare_rows_for_sheet(rows: list[dict]) -> tuple[list[list], list[int]]:
                 clk,
                 _format_money(cpc),
                 _format_percent(ctr),
-                conv,
+                direct_conv,
+                goal_conv_cell,
                 _format_money(cpa),
                 _format_percent(cr),
             ])
@@ -139,6 +148,8 @@ def _prepare_rows_for_sheet(rows: list[dict]) -> tuple[list[list], list[int]]:
         total_imp = sum(row["impressions"] for row in month_rows)
         total_clk = sum(row["clicks"] for row in month_rows)
         total_conv = sum(row["conversions"] for row in month_rows)
+        total_direct_conv = sum(row.get("direct_conversions", 0) for row in month_rows)
+        total_goal_conv = sum(row.get("goal_conversions", 0) or 0 for row in month_rows)
 
         ctr = round((total_clk / total_imp * 100) if total_imp > 0 else 0, 2)
         cpc = round((total_cost / total_clk) if total_clk > 0 else 0, 2)
@@ -152,7 +163,8 @@ def _prepare_rows_for_sheet(rows: list[dict]) -> tuple[list[list], list[int]]:
             total_clk,
             _format_money(cpc),
             _format_percent(ctr),
-            total_conv,
+            total_direct_conv,
+            total_goal_conv if any(row.get("goal_id") for row in month_rows) else "",
             _format_money(cpa),
             _format_percent(cr),
         ])
@@ -213,7 +225,7 @@ def write_rows_to_sheet(rows: list[dict]):
                         "startRowIndex": bold_row - 1,
                         "endRowIndex": bold_row,
                         "startColumnIndex": 0,
-                        "endColumnIndex": 9,
+                        "endColumnIndex": 10,
                     },
                     "cell": {
                         "userEnteredFormat": {
@@ -236,7 +248,7 @@ def write_rows_to_sheet(rows: list[dict]):
                         "startRowIndex": 0,
                         "endRowIndex": total_rows,
                         "startColumnIndex": 1,
-                        "endColumnIndex": 9,
+                        "endColumnIndex": 10,
                     },
                     "cell": {
                         "userEnteredFormat": {
