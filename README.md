@@ -11,10 +11,10 @@
 1. В Telegram отправляется команда вида:
 
 ```text
-/report metall-cvt 01.01.2026-02.01.2026
+/report client-example 01.01.2026-02.01.2026
 ```
 
-2. Бот находит клиента в `clients.json`.
+2. Бот использует имя клиента как `direct_login` и `worksheet_name`; если `clients.json` присутствует, он тоже может использоваться как справочник.
 3. Бот разбирает период.
 4. Скрипт забирает данные из API Яндекс.Директа и Яндекс.Метрики.
 5. Данные агрегируются по дням и считаются итоговые значения.
@@ -39,42 +39,42 @@
 ### Пример 1: один день
 
 ```text
-/report metall-cvt 2026-05-06
+/report client-example 2026-05-06
 ```
 
 ### Пример 2: месяц
 
 ```text
-/report metall-cvt 2026-05
+/report client-example 2026-05
 ```
 
 ### Пример 3: диапазон
 
 ```text
-/report metall-cvt 01.01.2026-02.01.2026
+/report client-example 01.01.2026-02.01.2026
 ```
 
 Если команда введена без периода или с ошибкой, бот покажет подсказку с форматом.
 
 ## Что такое `client_id`
 
-`client_id` — это ключ клиента в файле `clients.json`.
+`client_id` — это логин клиента, например `client-example`.
 
 Пример:
 
 ```json
 {
-  "metall-cvt": {
-    "direct_login": "metall-cvt",
+  "client-example": {
+    "direct_login": "direct-login-example",
     "metrika_counter": "53749281",
-    "worksheet_name": "metall-cvt"
+    "worksheet_name": "sheet-example"
   }
 }
 ```
 
 В этом примере:
 
-- `metall-cvt` — идентификатор клиента для бота
+- `client-example` — идентификатор клиента для бота
 - `direct_login` — логин в Яндекс.Директе
 - `metrika_counter` — счётчик Метрики
 - `worksheet_name` — название листа в Google Sheets
@@ -146,15 +146,9 @@ Allowlist формируется из двух источников:
 
 ## Как добавлять нового клиента
 
-Клиенты описываются в `clients.json`.
+Если у вас один общий счётчик Метрики, отдельный `clients.json` не нужен: просто передавайте логин клиента в команде `/report`, а бот сам подставит его в `direct_login` и `worksheet_name`.
 
-Нужно добавить новый объект в файл с тремя полями:
-
-- `direct_login`
-- `metrika_counter`
-- `worksheet_name`
-
-После обновления `clients.json` новый клиент сразу доступен в боте как `client_id`.
+Если у разных клиентов разные счётчики Метрики, тогда `clients.json` можно оставить как справочник с полями `direct_login`, `metrika_counter`, `worksheet_name`.
 
 ## Ручной запуск через GitHub Actions
 
