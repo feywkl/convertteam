@@ -126,7 +126,7 @@ def _is_admin(chat_id: int | str) -> bool:
 
 def _is_allowed_chat(chat_id: int | str) -> bool:
     """Проверить, разрешён ли доступ пользователю."""
-    return str(chat_id) in _load_allowlist() or _is_admin(chat_id)
+    return _is_admin(chat_id)
 
 
 def _parse_client(client_token: str) -> tuple[str, str]:
@@ -228,14 +228,14 @@ def _handle_report(chat_id: int, args: list[str]):
 
 
 def _handle_admin(chat_id: int, command: str, args: list[str]):
-    if not _is_admin(chat_id):
-        _send_message(chat_id, "❌ У вас нет прав администратора.")
-        return
-
     command = command.lower()
 
     if command == "/myid":
         _send_message(chat_id, f"👤 Ваш chat_id: `{chat_id}`")
+        return
+
+    if not _is_admin(chat_id):
+        _send_message(chat_id, "❌ У вас нет прав администратора.")
         return
 
     if command == "/admins":
