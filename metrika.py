@@ -6,6 +6,16 @@
 import requests
 
 METRIKA_API_URL = "https://api-metrika.yandex.net/stat/v1/data"
+METRIKA_GOALS_API_URL = "https://api-metrika.yandex.net/management/v1/counter/{counter_id}/goals"
+
+
+def list_goals(token: str, counter_id: str) -> list[dict]:
+    headers = {"Authorization": f"OAuth {token}"}
+    resp = requests.get(METRIKA_GOALS_API_URL.format(counter_id=counter_id), headers=headers)
+    if resp.status_code != 200:
+        raise Exception(f"Метрика API ошибка {resp.status_code} при получении целей: {resp.text}")
+    data = resp.json()
+    return data.get("goals", [])
 
 
 def get_stats(token: str, counter_id: str, date_from: str, date_to: str,
@@ -18,6 +28,11 @@ def get_stats(token: str, counter_id: str, date_from: str, date_to: str,
     metrics_list = ["ym:s:visits", "ym:s:bounceRate"]
 
     if goal_id:
+        goal_exists = any(str(goal.get("id")) == str(goal_id) for goal in list_goals(token, counter_id))
+        if not goal_exists:
+            raise Exception(
+                f"Цель {goal_id} не найдена в счётчике {counter_id}. Проверьте ID цели в Метрике."
+            )
         metrics_list.append(f"ym:s:goal{goal_id}reaches")
 
     params = {
