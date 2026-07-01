@@ -130,15 +130,8 @@ def _is_allowed_chat(chat_id: int | str) -> bool:
 
 
 def _parse_client(client_token: str) -> tuple[str, str]:
-    normalized = re.sub(r"[\s_-]+", "", client_token.strip().lower())
-
-    for client_key, client_cfg in config.PROJECTS.items():
-        key_norm = re.sub(r"[\s_-]+", "", client_key.lower())
-        sheet_norm = re.sub(r"[\s_-]+", "", str(client_cfg.get("worksheet_name", "")).lower())
-        if normalized == key_norm or normalized == sheet_norm:
-            return client_key, client_cfg.get("worksheet_name", client_key)
-
-    raise KeyError(f"Клиент '{client_token}' не найден в clients.json")
+    client_key, client_cfg = config.resolve_project(client_token)
+    return client_key, client_cfg.get("worksheet_name", client_key)
 
 
 def _parse_date(value: str) -> date:

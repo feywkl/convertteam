@@ -27,14 +27,8 @@ def _select_projects(client_key: str = None):
     if not client_key:
         return list(config.PROJECTS.items())
 
-    if client_key in config.PROJECTS:
-        return [(client_key, config.PROJECTS[client_key])]
-
-    for name, cfg in config.PROJECTS.items():
-        if cfg.get("worksheet_name") == client_key:
-            return [(name, cfg)]
-
-    raise KeyError(f"Клиент '{client_key}' не найден в clients.json")
+    project_name, project_cfg = config.resolve_project(client_key)
+    return [(project_name, project_cfg)]
 
 
 def collect_data(date_from: str, date_to: str, client_key: str = None) -> list[dict]:
